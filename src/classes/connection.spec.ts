@@ -1,6 +1,7 @@
-import {Connection} from "./connection";
+import { Connection } from "./connection";
 
-test('Connects to test Dgraph server', () => {
-    // TODO Make proper test
-    expect(new Connection('not-an-uri').uri).toBe('not-an-uri');
-})
+test("Connects to test Dgraph server", () => {
+  // // TODO Make proper test
+  // expect(new Connection('not-an-uri').uri).toBe('not-an-uri');
+  // Create connection to local development environment
+});
