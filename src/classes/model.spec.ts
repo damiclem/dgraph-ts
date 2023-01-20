@@ -12,7 +12,7 @@ test("test model definition", () => {
   const User = model.document;
   // Create user
   const user = new User({ name: "", age: 1, email: "user.email@host.domain" });
-  // TODO Remove this
+  // Test user values
   expect(typeof user.properties.name).toEqual("string");
   expect(typeof user.properties.age).toEqual("number");
   expect(typeof user.properties.email).toEqual("string");

@@ -1,15 +1,17 @@
-import { Schema, MapDTypes, Property, DType } from "./schema";
+import { Schema, MapDTypes } from "./schema";
 import { Connection } from "./connection";
+import { Document } from "./document";
 
 export class Model<S extends Schema> {
   public name: string;
   public schema: S;
   public connection?: Connection;
 
-  constructor(name: string, schema: S) {
+  constructor(name: string, schema: S, connection?: Connection) {
     // Initialize name and schema
     this.name = name;
     this.schema = schema;
+    this.connection = connection;
   }
 
   // Define client getter
@@ -34,18 +36,19 @@ export class Model<S extends Schema> {
 
   // TODO Define getter for document constructor
   get document() {
+    //  Retrieve name
+    const name = this.name;
+    //  Retrieve client
+    const client = this.client;
     // Retrieve properties
     const properties = this.properties;
     // Define type of properties
     type Properties = MapDTypes<typeof properties>;
     // Return constructor
-    return class {
-      // public client?: Client;
-      public properties: Properties;
+    return class extends Document<Properties> {
       constructor(properties: Properties) {
-        // // Initialize attributes
-        // this.client = client;
-        this.properties = properties;
+        // TODO Call parent constructor
+        super(name, properties, client);
       }
     };
   }
