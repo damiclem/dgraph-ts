@@ -28,7 +28,7 @@ export class Connection {
     this.client.setDebugMode(debug === true);
   }
 
-  public model(name: string, schema: Schema) {
+  model(name: string, schema: Schema) {
     // TODO Set connection
     return new Model(name, schema);
   }

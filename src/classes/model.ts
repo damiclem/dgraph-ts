@@ -1,18 +1,13 @@
-import { Schema, asInterface, MapDTypes } from "./schema";
+import { Schema, MapDTypes, Property, DType } from "./schema";
 import { Connection } from "./connection";
-//
-// export class Document<Schema> {
-//   conn?: Connection;
-//   props: as;
-//   constructor(props: Record<string, any>) {}
-// }
 
-export class Model {
+export class Model<S extends Schema> {
   public name: string;
-  public schema: Schema;
+  public schema: S;
   public connection?: Connection;
 
-  constructor(name: string, schema: Schema) {
+  constructor(name: string, schema: S) {
+    // Initialize name and schema
     this.name = name;
     this.schema = schema;
   }
@@ -22,30 +17,35 @@ export class Model {
     return this.connection!.client;
   }
 
-  // TODO Generate document constructor out of model
+  // TODO Define getter for properties
+  get properties() {
+    // Define schema
+    const schema = this.schema;
+    // Extract properties
+    const _props = Object.entries(schema).map(([key, prop]) => [
+      key,
+      prop.type,
+    ]);
+    // Create properties dictionary
+    const props = Object.fromEntries(_props);
+    // Return properties dictionary
+    return props as { [K in keyof S]: S[K]["type"] };
+  }
+
+  // TODO Define getter for document constructor
   get document() {
-    // Cast schema to interface
-    const _schema = asInterface(this.schema);
-    // Define properties for current document out of model's schema
-    type Properties = MapDTypes<typeof _schema>;
-    // Define connection
-    const connection = this.connection;
-    // Create document constructor
+    // Retrieve properties
+    const properties = this.properties;
+    // Define type of properties
+    type Properties = MapDTypes<typeof properties>;
+    // Return constructor
     return class {
-      properties: Properties;
-      connection?: Connection;
-
-      // TODO Define properties types
+      // public client?: Client;
+      public properties: Properties;
       constructor(properties: Properties) {
-        // Store properties passed as input
+        // // Initialize attributes
+        // this.client = client;
         this.properties = properties;
-        // Set connection
-        this.connection = connection;
-      }
-
-      get client() {
-        // Return client, if any
-        return this.connection?.client;
       }
     };
   }
