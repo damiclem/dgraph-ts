@@ -44,11 +44,33 @@ export class Model<S extends Schema> {
     // Define type of properties
     type Properties = MapDTypes<typeof properties>;
     // Return constructor
-    return class extends Document<Properties, S> {
+    return class extends Document<Properties> {
+      // Override constructor
       constructor(properties: Properties) {
         // Call parent constructor
-        super(properties, model);
+        super(properties);
       }
+
+      // Override parse function
+      static fromJson(json: any) {
+        // Define unique identifier
+        const uid: string = json["uid"];
+        // Initialize properties
+        const properties_ = Object.fromEntries(
+          Object.keys(properties).map((key) => {
+            // Compose custom key
+            const _key = model.name + "_" + key;
+            // Return expected key, value pair
+            return [key, json[_key]];
+          })
+        );
+        // Create new document
+        return new this({ ...(properties_ as Properties), uid });
+      }
+
+      // TODO Override find function
+
+      // TODO Override findOne function
     };
   }
 

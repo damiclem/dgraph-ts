@@ -12,151 +12,67 @@ function getUID(response: any): string {
   return first;
 }
 
-// // TODO Use a workaround in order to use class type in static function
-// // https://stackoverflow.com/questions/52518125/workaround-for-accessing-class-type-arguments-in-static-method-in-typescript
-export class Document<P, S extends Schema> {
-  public properties: P & { uid?: string };
-  public model: Model<S>;
+export class Document<P> {
+  public properties: P;
+  static model: Model<never>;
 
-  // Create document
-  constructor(properties: P & { uid?: string }, model: Model<S>) {
-    // Store attributes
+  constructor(properties: P) {
     this.properties = properties;
-    this.model = model;
   }
 
-  /**
-   * Get client out of model
-   */
+  get model() {
+    return (this.constructor as typeof Document<P>).model;
+  }
+
   get client() {
     return this.model.client;
   }
 
-  /**
-   * Get document name out of model
-   */
   get name() {
     return this.model.name;
   }
 
-  /**
-   * Get unique identifier for document, if any
-   */
-  get uid() {
-    return this.properties.uid;
-  }
-
-  /**
-   * TODO Get multiple documents
-   */
-  static find() {
+  static parse<P>(json: any): Document<P> {
     throw new Error("Not implemented");
   }
 
-  /**
-   * TODO Get single document
-   */
-  static findOne() {
-    throw new Error("Not implemented");
+  static async find<P>(): Promise<Array<Document<P>>> {
+    // Initialize transaction
+    const txn = this.model.client.newTxn({ bestEffort: true, readOnly: true });
+    // TODO Initialize return array
+    const documents = new Array<Document<P>>();
+    // Define transaction
+    try {
+      // Define query
+      // NOTE Predicate expand(_all_) requires type to be set
+      const query = `query documents($name: string) {
+        documents(func: eq(dgraph.type, $name)) {
+          expand(_all_)
+        }
+      }`;
+      // Retrieve gRPC response object
+      const grpc = await txn.queryWithVars(query, { $name: this.model.name });
+      // Retrieve JSON response object
+      const json = grpc.getJson();
+      // Loop through each document
+      json.documents.forEach(
+        ({ uid, ...properties }: { uid?: string; properties: P }) => {
+          // Create document instance
+          const document = new this({ uid, ...(properties as P) });
+          // Store document instance
+          documents.push(document);
+        }
+      );
+      // Return retrieved document
+      return documents;
+      // Retrieve
+    } finally {
+      // Rollback transaction, does nothing if committed
+      await txn.discard();
+    }
   }
 
-  /**
-   * TODO Save current document
-   */
-  public save(): Promise<Document<P, S>> {
+  static async findOne<P>(): Promise<Document<P>> {
     throw new Error("Not implemented");
   }
-
-  /**
-   * TODO Delete current document
-   */
-  public delete(): Promise<Document<P, S>> {
-    throw new Error("Not implemented");
-  }
-}
-
-/**
- * TODO Cast JSON object to given document
- *
- */
-export function fromJson<P, S extends Schema>(
-  json: any,
-  properties: P,
-  model: Model<S>
-): Document<P, S> {
-  // Define unique identifier
-  const uid: string = json["uid"];
-  // Initialize properties
-  const properties_ = Object.fromEntries(
-    Object.keys(properties).map((key) => {
-      // Compose custom key
-      const _key = model.name + "_" + key;
-      // Return expected key, value pair
-      return [key, json[_key]];
-    })
-  );
-  // Create document
-  return new Document<P, S>({ ...(properties_ as P), uid }, model);
-}
-
-/**
- * Find multiple documents in database corresponding to given model
- *
- * @param model
- */
-export async function find<S extends Schema>(model: Model<S>) {
-  // Get DGraph client
-  const client = model.client;
-  // Initialize transaction
-  const txn = client.newTxn({ bestEffort: true, readOnly: true });
-  // get properties from model
-  const properties = model.properties;
-  // Define type for properties
-  type Properties = MapDTypes<typeof properties>;
-  // Initialize results array
-  const documents = new Array<Document<Properties, S>>();
-  // Define query
-  // NOTE Predicate expand(_all_) requires type to be set
-  const query = `query documents($name: string) {
-      documents(func: eq(dgraph.type, $name)) {
-        expand(_all_)
-      }
-    }`;
-  // Retrieve gRPC response object
-  const grpc = await txn.queryWithVars(query, { $name: model.name });
-  // Retrieve JSON response object
-  const json = grpc.getJson();
-  // TODO Loop through each document
-  json.documents.forEach((item: never) => {
-    // Store document
-    documents.push(
-      fromJson(item, properties, model) as Document<Properties, S>
-    );
-  });
-  // Return retrieved document
-  return documents;
-}
-
-export async function findOne<S extends Schema>(uid: string, model: Model<S>) {
-  // Get DGraph client
-  const client = model.client;
-  // Initialize transaction
-  const txn = client.newTxn({ bestEffort: true, readOnly: true });
-  // Get properties (keys are needed)
-  const properties = model.properties;
-  // Set type for properties
-  type Properties = MapDTypes<typeof properties>;
-  // Define query
-  // NOTE Predicate expand(_all_) requires type to be set
-  const query = `query documents($uid: string, $name: string) {
-      documents(func: eq(uid, $uid)) @filter(eq(dgraph.type, $name)) {
-        expand(_all_)
-      }
-    }`;
-  // Retrieve gRPC response object
-  const grpc = await txn.queryWithVars(query, { $uid: uid, $name: model.name });
-  // Retrieve JSON response object
-  const json = grpc.getJson().shift();
-  // Loop through each property key
-  return new Document(fromJson(json, properties, model), model);
 }
