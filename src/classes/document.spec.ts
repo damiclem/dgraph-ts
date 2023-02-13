@@ -16,7 +16,7 @@ test("test document lifecycle", async () => {
   const Car = model.document;
   // Test car construction
   const car1 = new Car({ brand: "", year: 11, model: "" });
-  const car2 = Car.fromJson({});
+  const car2 = Car.parse({});
   car1.properties.model;
-  car2.properties.brand;
+  car2.properties.year;
 });

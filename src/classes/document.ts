@@ -1,9 +1,9 @@
-import { DgraphClient, Mutation, Operation } from "dgraph-js";
-import { Model } from "./model";
-import { MapDTypes, Schema } from "./schema";
-
 // Define function for returning UID out of response
-function getUID(response: any): string {
+import { Schema } from "./schema";
+import { Mutation } from "dgraph-js";
+import { Model } from "./model";
+
+export function getUID(response: any): string {
   // Initialize first UID
   let first: string;
   // Loop through each UID
@@ -12,67 +12,79 @@ function getUID(response: any): string {
   return first;
 }
 
-export class Document<P> {
+export class Document<P, S extends Schema> {
+  public uid?: string;
   public properties: P;
-  static model: Model<never>;
+  public model: Model<S>;
 
-  constructor(properties: P) {
-    this.properties = properties;
-  }
-
-  get model() {
-    return (this.constructor as typeof Document<P>).model;
-  }
-
-  get client() {
-    return this.model.client;
+  constructor(properties: P & { uid?: string }, model: Model<S>) {
+    // Separate UID and properties
+    const { uid, ...others } = properties;
+    // Store UID and properties
+    this.properties = others as P;
+    this.uid = uid as string;
+    // Store model
+    this.model = model;
   }
 
   get name() {
     return this.model.name;
   }
 
-  static parse<P>(json: any): Document<P> {
-    throw new Error("Not implemented");
+  get client() {
+    return this.model.client;
   }
 
-  static async find<P>(): Promise<Array<Document<P>>> {
+  public async save(options = { readonly: true, bestEffort: false }) {
     // Initialize transaction
-    const txn = this.model.client.newTxn({ bestEffort: true, readOnly: true });
-    // TODO Initialize return array
-    const documents = new Array<Document<P>>();
+    const txn = this.client.newTxn(options);
     // Define transaction
     try {
-      // Define query
-      // NOTE Predicate expand(_all_) requires type to be set
-      const query = `query documents($name: string) {
-        documents(func: eq(dgraph.type, $name)) {
-          expand(_all_)
-        }
-      }`;
-      // Retrieve gRPC response object
-      const grpc = await txn.queryWithVars(query, { $name: this.model.name });
-      // Retrieve JSON response object
-      const json = grpc.getJson();
-      // Loop through each document
-      json.documents.forEach(
-        ({ uid, ...properties }: { uid?: string; properties: P }) => {
-          // Create document instance
-          const document = new this({ uid, ...(properties as P) });
-          // Store document instance
-          documents.push(document);
-        }
-      );
-      // Return retrieved document
-      return documents;
-      // Retrieve
+      // Initialize mutation
+      const mu = new Mutation();
+      // Set properties as
+      mu.setSetJson(this.properties);
+      // Execute mutation
+      const response = await txn.mutate(mu);
+      // Commit transaction
+      await txn.commit();
+      // Get UID of inserted document (node)
+      this.uid = getUID(response);
     } finally {
       // Rollback transaction, does nothing if committed
       await txn.discard();
     }
+    // Return current document
+    return this;
   }
 
-  static async findOne<P>(): Promise<Document<P>> {
-    throw new Error("Not implemented");
+  public async remove(options = { readonly: false, bestEffort: false }) {
+    // Case UID is set
+    if (this.uid) {
+      // Initialize transaction
+      const txn = this.client.newTxn(options);
+      // Define transaction
+      try {
+        // Initialize mutation
+        const mu = new Mutation();
+        // Set properties as
+        mu.setDeleteJson({ uid: this.uid });
+        // Execute mutation
+        const response = await txn.mutate(mu);
+        // Commit transaction
+        await txn.commit();
+        // Get UID of inserted document (node)
+        this.uid = getUID(response);
+      } finally {
+        // Rollback transaction, does nothing if committed
+        await txn.discard();
+      }
+      // Unset UID
+      this.uid = undefined;
+      // Return current instance
+      return this;
+    }
+    // Otherwise, throw error
+    throw Error("UID is not set!");
   }
 }
